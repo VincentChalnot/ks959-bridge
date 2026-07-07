@@ -250,7 +250,10 @@ impl SirUnwrapper {
                 match self.state {
                     UnwrapState::OutsideFrame => {
                         if other != XBOF {
-                            trace!(byte = format_args!("0x{:02X}", other), "noise outside frame");
+                            trace!(
+                                byte = format_args!("0x{:02X}", other),
+                                "noise outside frame"
+                            );
                         }
                     }
                     UnwrapState::BeginFrame => {
@@ -302,10 +305,7 @@ impl SirUnwrapper {
         let payload_len = self.buffer.len().saturating_sub(2);
         let payload = self.buffer[..payload_len].to_vec();
 
-        debug!(
-            len = payload.len(),
-            "valid frame received"
-        );
+        debug!(len = payload.len(), "valid frame received");
 
         Some(payload)
     }
@@ -562,7 +562,11 @@ mod tests {
 
         let mut unwrapper = SirUnwrapper::new();
         let results = unwrapper.process_bytes(&stream);
-        assert_eq!(results.len(), 2, "garbage should not prevent frame extraction");
+        assert_eq!(
+            results.len(),
+            2,
+            "garbage should not prevent frame extraction"
+        );
         assert_eq!(&results[0], b"frame-A");
         assert_eq!(&results[1], b"frame-B");
     }
@@ -620,7 +624,10 @@ mod tests {
         // is discarded.  Whatever follows may or may not form a valid frame.
         // We care that the original payload is NOT in the output.
         for r in &results {
-            assert_ne!(r, payload, "original payload should be discarded after BOF reset");
+            assert_ne!(
+                r, payload,
+                "original payload should be discarded after BOF reset"
+            );
         }
     }
 

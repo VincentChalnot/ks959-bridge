@@ -12,8 +12,9 @@ IrDA protocol stack, talking directly to the dongle over USB control transfers. 
 reverse-engineering to determine what the dive computer expects as IR signals and how to craft them with this specific
 hardware.
 
-**Current status:** Heavy development. All unit tests pass (45/45). The main blocker is the USB speed change control
-transfer — see "Known Blocker" below.
+**Current status:** All unit tests pass (45/45). USB TX, RX, PTY bridge, and speed change (via kernel module) all
+verified on hardware. CMD_VERSION response successfully received from Donatello. The remaining work is end-to-end
+dive download testing. See `docs/STATUS.md` for details.
 
 ## Tech Stack & Structure
 
@@ -34,6 +35,13 @@ transfer — see "Known Blocker" below.
 | `sir_framing.rs` | IrDA SIR wrap/unwrap (BOF/EOF/escape/CRC). Optional, off by default — Donatello uses raw serial |
 | `pty_bridge.rs`  | PTY master/slave pair, symlink creation, baud rate polling via `tcgetattr()`                    |
 
+### Kernel module (`kmod/`)
+
+| File             | Purpose                                                                 |
+|------------------|-------------------------------------------------------------------------|
+| `ks959_speed.c`  | Minimal kernel module to bypass usbfs for speed change                  |
+| `Makefile`        | Build against running kernel's headers                                  |
+
 ### Reference directory (`reference/`)
 
 Contains source code for reference only — do not modify:
@@ -48,6 +56,7 @@ Contains source code for reference only — do not modify:
 ```bash
 cargo build --release          # builds to ./target/release/ks959-bridge
 cargo test                     # runs all 45 unit tests (no hardware needed)
+cd kmod && make                # build kernel module
 ```
 
 The program needs USB access to the dongle. Run as `root`, or create a udev rule:
@@ -81,18 +90,12 @@ RUST_LOG=trace ./target/release/ks959-bridge   # hex dumps of every USB transfer
 - Run `cargo fmt` before committing
 - Run `cargo clippy` if available
 
-## Known Blocker: USB Speed Change
-
-The speed change control transfer uses `wIndex=0x0001` which the Linux kernel's `usbfs` rejects via
-`check_ctrlrecip()` (see `KNOWLEDGE.md` § "The usbfs check_ctrlrecip Problem"). Current code uses
-`ControlType::Vendor` (bRequestType=0x41) to bypass kernel validation — **untested on hardware**. If this also fails,
-fallback options are a minimal kernel module, eBPF hook, or avoiding speed changes entirely.
-
 ## Critical Domain Knowledge
 
 - **The Donatello uses raw serial over IrDA SIR** — no BOF/EOF/escape/CRC framing. `--sir-framing` is off by default.
 - **RX de-obfuscation counter** (`rx_counter: u8`) persists across ALL reads for the entire session. If bytes are lost,
   the counter desyncs and all subsequent decoding is garbage. Recovery requires dongle reset.
+- **Stale data drain + counter reset** on startup and baud rate change prevents the known desync bug.
 - **Baud rate detection** polls `tcgetattr()` on the slave fd — TIOCPKT does NOT fire for plain `tcsetattr()` baud rate
   changes on Linux.
 - **nix 0.29 has no `pty` feature** — PTY functions live under the `term` feature flag.
@@ -103,6 +106,13 @@ fallback options are a minimal kernel module, eBPF hook, or avoiding speed chang
 - **Low-speed USB device** — max 8 bytes per control transfer packet. The dongle's interrupt endpoint is a dummy; all
   communication uses endpoint 0 control transfers.
 - **Obfuscation key** is the firmware author's name: `"wangshuofei19710"`.
+- **Speed change requires kernel module** — usbfs `check_ctrlrecip()` blocks `wIndex=0x0001` with `bRequestType=0x21`.
+  The `ks959_speed.ko` module bypasses this. Can only be used once per USB plug cycle.
+- **LD_PRELOAD shim needed** — libdivecomputer calls `TIOCMBIC` (clear RTS) which PTYs don't support. The shim silently
+  succeeds for modem-control ioctls.
+- **dctool binary** — use `.libs/dctool` (real binary), not the libtool wrapper. Set `LD_LIBRARY_PATH` to
+  `./reference/libdivecomputer/src/.libs`.
+- **Donatello hibernates after ~1 minute** in PC mode. Have everything staged before putting it in PC mode.
 
 ## Before You Commit
 
@@ -111,9 +121,14 @@ cargo test
 cargo fmt --check
 ```
 
-## Additional References
+## Documentation
 
-- `DESIGN.md` — architecture, protocol details, approaches evaluated, test plan
-- `KNOWLEDGE.md` — complete knowledge base: USB protocol, IrDA SIR framing, Cressi Donatello protocol, hardware
-  alternatives
+- `docs/README.md` — overview and quick start
+- `docs/SETUP.md` — build, environment, hardware, kernel module, LD_PRELOAD shim
+- `docs/PROTOCOL.md` — USB protocol, IrDA SIR, Cressi Donatello wire format
+- `docs/ARCHITECTURE.md` — code structure, modules, event loop, dependencies
+- `docs/STATUS.md` — what works, what doesn't, the speed change saga, known issues
+- `docs/TESTING.md` — dctool commands, debugging, log analysis, common issues
+- `DESIGN.md` — original design document (architecture, approaches evaluated)
+- `KNOWLEDGE.md` — complete knowledge base (may be partially outdated, prefer `docs/`)
 - `README.md` — user-facing build/usage instructions

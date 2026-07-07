@@ -125,10 +125,7 @@ impl PtyBridge {
         debug!(slave = %slave_dev_path.display(), "PTY slave device");
 
         // Set the master fd to non-blocking.
-        let flags = nix::fcntl::fcntl(
-            pty.master.as_raw_fd(),
-            nix::fcntl::FcntlArg::F_GETFL,
-        )?;
+        let flags = nix::fcntl::fcntl(pty.master.as_raw_fd(), nix::fcntl::FcntlArg::F_GETFL)?;
         nix::fcntl::fcntl(
             pty.master.as_raw_fd(),
             nix::fcntl::FcntlArg::F_SETFL(
@@ -206,11 +203,7 @@ impl PtyBridge {
     pub fn check_baud_rate_change(&mut self) -> Result<Option<u32>, PtyError> {
         let current = self.slave_baud_rate()?;
         if current != self.last_baud {
-            info!(
-                old = self.last_baud,
-                new = current,
-                "baud rate changed"
-            );
+            info!(old = self.last_baud, new = current, "baud rate changed");
             self.last_baud = current;
             Ok(Some(current))
         } else {
@@ -288,12 +281,8 @@ mod tests {
 
         let mut termios = nix::sys::termios::tcgetattr(&slave_file).unwrap();
         nix::sys::termios::cfmakeraw(&mut termios);
-        nix::sys::termios::tcsetattr(
-            &slave_file,
-            nix::sys::termios::SetArg::TCSANOW,
-            &termios,
-        )
-        .unwrap();
+        nix::sys::termios::tcsetattr(&slave_file, nix::sys::termios::SetArg::TCSANOW, &termios)
+            .unwrap();
         slave_file
     }
 
@@ -367,22 +356,10 @@ mod tests {
         // Set 115200 baud on the slave (simulating libdivecomputer).
         let mut termios = nix::sys::termios::tcgetattr(&slave_file).unwrap();
         nix::sys::termios::cfmakeraw(&mut termios);
-        nix::sys::termios::cfsetospeed(
-            &mut termios,
-            nix::sys::termios::BaudRate::B115200,
-        )
-        .unwrap();
-        nix::sys::termios::cfsetispeed(
-            &mut termios,
-            nix::sys::termios::BaudRate::B115200,
-        )
-        .unwrap();
-        nix::sys::termios::tcsetattr(
-            &slave_file,
-            nix::sys::termios::SetArg::TCSANOW,
-            &termios,
-        )
-        .unwrap();
+        nix::sys::termios::cfsetospeed(&mut termios, nix::sys::termios::BaudRate::B115200).unwrap();
+        nix::sys::termios::cfsetispeed(&mut termios, nix::sys::termios::BaudRate::B115200).unwrap();
+        nix::sys::termios::tcsetattr(&slave_file, nix::sys::termios::SetArg::TCSANOW, &termios)
+            .unwrap();
 
         // check_baud_rate_change should detect the change.
         let change = bridge.check_baud_rate_change().expect("check failed");

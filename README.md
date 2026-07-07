@@ -12,73 +12,55 @@ direct USB control transfers to the dongle so libdivecomputer can communicate wi
 
 ## Build
 
-```
+```bash
 cargo build --release
 ```
 
-## Usage
+## Quick Start
 
+```bash
+# 1. Build the kernel module (sets dongle to 115200 baud)
+cd kmod && make && cd ..
+
+# 2. Load kernel module
+sudo insmod kmod/ks959_speed.ko baud=115200
+
+# 3. Start bridge
+sudo ./target/release/ks959-bridge --baud 115200 --skip-speed-change
+
+# 4. In another terminal, run dctool against the PTY
+LD_PRELOAD=/tmp/pty_modem_shim.so \
+LD_LIBRARY_PATH=./reference/libdivecomputer/src/.libs \
+  ./reference/libdivecomputer/examples/.libs/dctool \
+  -v -l cressi.log -f goa -m 4 download -o dives.xml /tmp/cressi-irda
 ```
-# Plug in the Kingsun KS-959 dongle, then:
-sudo ./target/release/ks959-bridge
 
-# In Subsurface: select /tmp/cressi-irda as the serial port
-```
-
-The program creates a PTY and symlinks it to `/tmp/cressi-irda` (configurable with `--symlink`). Point Subsurface at
-this path.
+The program creates a PTY and symlinks it to `/tmp/cressi-irda` (configurable with `--symlink`).
 
 ### Options
 
-| Flag                 | Default            | Description                           |
-|----------------------|--------------------|---------------------------------------|
-| `-s, --symlink PATH` | `/tmp/cressi-irda` | PTY symlink path                      |
-| `-b, --baud RATE`    | `9600`             | Initial IrDA baud rate                |
-| `--poll-ms MS`       | `10`               | USB RX polling interval               |
-| `--sir-framing`      | off                | Enable IrDA SIR framing (BOF/EOF/CRC) |
-| `--extra-bofs N`     | `10`               | Extra BOFs in SIR mode                |
-
-### Baud rate
-
-The dongle starts at the initial baud rate (default 9600). When the application (libdivecomputer) calls `tcsetattr()` to
-change speed (typically to 115200 for the Donatello), ks959-bridge detects the change and reconfigures the dongle
-automatically.
-
-### SIR framing
-
-The Cressi Donatello uses `DC_TRANSPORT_SERIAL` in libdivecomputer — it sends raw serial bytes over IrDA's physical
-layer, **not** SIR-framed packets. The `--sir-framing` flag is for other IrDA devices that use the full IrDA protocol
-stack.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-s, --symlink PATH` | `/tmp/cressi-irda` | PTY symlink path |
+| `-b, --baud RATE` | `9600` | Initial IrDA baud rate |
+| `--skip-speed-change` | off | Skip USB speed change at startup (use with kernel module) |
+| `--poll-ms MS` | `10` | USB RX polling interval |
+| `--sir-framing` | off | Enable IrDA SIR framing (BOF/EOF/CRC) |
 
 ### Logging
 
-```
+```bash
 RUST_LOG=debug ./target/release/ks959-bridge    # protocol events
 RUST_LOG=trace ./target/release/ks959-bridge    # every USB transfer (hex dumps)
 ```
 
-## Architecture
+## Tests
 
+```bash
+cargo test
 ```
-  Subsurface / libdivecomputer
-         |
-    /tmp/cressi-irda (PTY slave)
-         |
-  +----- ks959-bridge -----+
-  | pty_bridge          |  PTY master, non-blocking I/O, baud rate polling
-  | usb_dongle          |  Kingsun KS-959: obfuscation, fragmentation, USB control transfers
-  | sir_framing         |  IrDA SIR wrap/unwrap (optional, off by default)
-  | main.rs             |  tokio select! loop: PTY ↔ USB bridge
-  +---------------------+
-         |
-    USB control transfers (endpoint 0)
-         |
-    Kingsun KS-959 dongle
-         |
-    IrDA SIR (infrared)
-         |
-    Cressi Donatello
-```
+
+45 tests cover SIR framing (CRC, state machine, round-trips), USB obfuscation/deobfuscation, and PTY bridge operations.
 
 ## Permissions
 
@@ -91,62 +73,55 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="07d0", ATTR{idProduct}=="4959", MODE="0666"
 
 Then reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 
-## Tests
+## Documentation
+
+- **[docs/SETUP.md](docs/SETUP.md)** — Build, environment, hardware, kernel module, LD_PRELOAD shim, alternative hardware
+- **[docs/PROTOCOL.md](docs/PROTOCOL.md)** — USB protocol, IrDA SIR, Cressi Donatello wire format
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Code structure, modules, event loop, dependencies
+- **[docs/STATUS.md](docs/STATUS.md)** — What works, what doesn't, the speed change saga, known issues
+- **[docs/TESTING.md](docs/TESTING.md)** — dctool commands, debugging, log analysis, common issues
+
+## Architecture
 
 ```
-cargo test
+  Subsurface / dctool
+       |
+  /tmp/cressi-irda (PTY slave — looks like a serial port)
+       |
+  +--- ks959-bridge ---+
+  | pty_bridge         |  PTY master, non-blocking I/O, baud rate polling
+  | usb_dongle         |  Kingsun KS-959: obfuscation, fragmentation, USB control transfers
+  | sir_framing        |  IrDA SIR wrap/unwrap (optional, off by default)
+  | main.rs            |  tokio select! loop: PTY ↔ USB bridge
+  +--------------------+
+       |
+  USB control transfers (endpoint 0)
+       |
+  Kingsun KS-959 dongle
+       |
+  IrDA SIR (infrared)
+       |
+  Cressi Donatello
 ```
-
-45 tests cover SIR framing (CRC, state machine, round-trips), USB obfuscation/deobfuscation, and PTY bridge operations.
-
-## Testing with dctool
-
-To test against the real device without Subsurface:
-
-```bash
-# Download dives
-dctool -v -l cressi.log -f goa -m 4 download -o dives.xml /tmp/cressi-irda
-
-# Raw memory dump
-dctool -f goa -m 4 dump -o dump.bin /tmp/cressi-irda
-
-# Parse previously downloaded dives
-dctool parse -i dives.xml
-```
-
-The `-f goa` flag selects the Cressi Goa family; `-m 4` selects the Donatello model.
 
 ## Alternatives
 
 If ks959-bridge doesn't work for your setup, other approaches exist:
 
-| Approach                                                | Cost        | Status                                                            |
-|---------------------------------------------------------|-------------|-------------------------------------------------------------------|
-| ESP32 + TFDU4101 (hardware IrDA UART mode)              | ~$8–15      | Proven by hb9eue                                                  |
-| USB-to-Serial (FTDI/CH340) + TFDU4101                   | ~$5–8       | Proven by Daniel Samarin                                          |
-| BLE transport (no IrDA hardware needed)                 | BLE adapter | Supported by libdivecomputer                                      |
-| Out-of-tree kernel modules (`github.com/cschramm/irda`) | $0          | Works for other IrDA devices; dead end for Donatello specifically |
+| Approach | Cost | Status |
+|----------|------|--------|
+| ESP32 + TFDU4101 (hardware IrDA UART mode) | ~$8–15 | Proven by hb9eue |
+| USB-to-Serial (FTDI/CH340) + TFDU4101 | ~$5–8 | Proven by Daniel Samarin |
+| BLE transport (no IrDA hardware needed) | BLE adapter | Supported by libdivecomputer |
+| Out-of-tree kernel modules (`github.com/cschramm/irda`) | $0 | Works for other IrDA devices; dead end for Donatello specifically |
 
-See `KNOWLEDGE.md` for full details on each approach.
+See [docs/SETUP.md](docs/SETUP.md) for full details on each approach.
 
-## References
-
-### Source Code
+## Source Code
 
 - `reference/ks959-sir.c` — original Linux kernel driver (reverse-engineered USB protocol)
 - `reference/irda/` — Linux IrDA subsystem (SIR framing, CRC)
 - `reference/libdivecomputer/` — dive computer communication (Cressi Donatello protocol)
-
-### External Links
-
-- [Subsurface issue #4147](https://github.com/subsurface/subsurface/issues/4147) — GitHub discussion with hb9eue's ESP32
-  solution
-- [Subsurface mailing list thread](https://groups.google.com/g/subsurface-divelog/c/ku56SSlCtZU) — Google Groups
-  discussion
-- [Out-of-tree IrDA kernel modules](https://github.com/cschramm/irda) — DKMS build of the removed IrDA stack
-- `docs/forum-message.txt` — Andrea Lusuardi's guide for Uwatec dive computers on Ubuntu with out-of-tree IrDA
-- `docs/perplexity.md` — full research investigation summary with decision rationale
-- `docs/irda-kernel-module/` — VM setup, protocol analysis, and alternative approaches
 
 ## License
 

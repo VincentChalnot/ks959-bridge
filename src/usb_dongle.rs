@@ -52,7 +52,11 @@ const KS_DATA_8_BITS: u8 = 0x03;
 #[derive(Debug, Error)]
 pub enum DongleError {
     /// No Kingsun KS-959 dongle found on the USB bus.
-    #[error("no Kingsun KS-959 dongle found (VID=0x{:04X} PID=0x{:04X})", VENDOR_ID, PRODUCT_ID)]
+    #[error(
+        "no Kingsun KS-959 dongle found (VID=0x{:04X} PID=0x{:04X})",
+        VENDOR_ID,
+        PRODUCT_ID
+    )]
     NotFound,
 
     /// USB operation failed.
@@ -245,6 +249,21 @@ impl KingsunDongle {
         Ok(())
     }
 
+    /// Reset the RX de-obfuscation counter to zero.
+    ///
+    /// Call this when a new client session starts (e.g., when the PTY slave
+    /// is opened by dctool/Subsurface) to flush any stale bytes that may
+    /// have desynchronized the counter.
+    pub fn reset_rx_counter(&mut self) {
+        if self.rx_counter != 0 {
+            info!(
+                old_counter = format_args!("0x{:02X}", self.rx_counter),
+                "resetting RX de-obfuscation counter"
+            );
+            self.rx_counter = 0;
+        }
+    }
+
     /// Send data to the dongle (TX direction: host → IrDA link).
     ///
     /// Handles obfuscation, padding, and fragmentation. Data larger than
@@ -371,11 +390,7 @@ mod tests {
             let data = vec![0xAA; len];
             let out = obfuscate_tx_buffer(&data);
             let expected = ((len + 7) & !0x07) + 0x10;
-            assert_eq!(
-                out.len(),
-                expected,
-                "padded_len for cleartext_len={len}"
-            );
+            assert_eq!(out.len(), expected, "padded_len for cleartext_len={len}");
         }
     }
 

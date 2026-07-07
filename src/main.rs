@@ -23,8 +23,21 @@ struct Args {
     symlink: PathBuf,
 
     /// Initial baud rate for the IrDA link.
+    ///
+    /// For rates other than 9600, the ks959_speed kernel module must be loaded
+    /// first: `sudo insmod kmod/ks959_speed.ko baud=115200`.  The bridge will
+    /// attempt the speed change via usbfs (Vendor+Interface workaround), but
+    /// the dongle may STALL it — the kernel module is the reliable path.
     #[arg(short, long, default_value_t = 9600)]
     baud: u32,
+
+    /// Skip the USB speed-change control transfer at startup.
+    ///
+    /// Use this when the ks959_speed kernel module has already set the dongle
+    /// to the desired baud rate.  The bridge will trust that the dongle is
+    /// at --baud and skip the (likely-to-STALL) usbfs speed change.
+    #[arg(long)]
+    skip_speed_change: bool,
 
     /// USB RX polling interval in milliseconds.
     #[arg(long, default_value_t = 10)]
@@ -61,19 +74,65 @@ async fn main() -> Result<()> {
     );
 
     // --- Open the USB dongle ---
-    let mut dongle = usb_dongle::KingsunDongle::open()
-        .context("failed to open Kingsun KS-959 dongle")?;
+    let mut dongle =
+        usb_dongle::KingsunDongle::open().context("failed to open Kingsun KS-959 dongle")?;
 
     // --- Set initial speed ---
-    dongle
-        .set_speed(args.baud)
-        .await
-        .context("failed to set initial baud rate")?;
-    let mut current_baud = args.baud;
+    // The dongle defaults to 9600 baud.  For higher rates (e.g. 115200 for
+    // Cressi Donatello), the ks959_speed kernel module should be loaded first
+    // because usbfs check_ctrlrecip blocks the wIndex=1 speed-change transfer.
+    // The bridge tries the usbfs path as a fallback (Vendor+Interface bRequestType
+    // 0x41) but the dongle typically STALLs it.
+    let mut current_baud = if args.skip_speed_change {
+        // Kernel module already set the speed — trust it.
+        info!(
+            baud = args.baud,
+            "skipping USB speed change (--skip-speed-change); assuming dongle is already at target baud rate"
+        );
+        args.baud
+    } else if args.baud != 9600 {
+        // Try usbfs speed change.  Warn on failure instead of aborting.
+        match dongle.set_speed(args.baud).await {
+            Ok(()) => {
+                info!(baud = args.baud, "dongle speed changed via usbfs");
+                args.baud
+            }
+            Err(e) => {
+                warn!(
+                    baud = args.baud,
+                    error = %e,
+                    "USB speed change STALLED (expected — dongle needs bRequestType=0x21). \
+                     Load the ks959_speed kernel module first: \
+                     sudo insmod kmod/ks959_speed.ko baud={}",
+                    args.baud
+                );
+                // Assume the dongle is at the requested speed (e.g., module
+                // loaded externally).  If it's actually at 9600, IR comms
+                // will fail — but at least the bridge starts.
+                args.baud
+            }
+        }
+    } else {
+        // Default 9600 — dongle powers on at 9600, no change needed.
+        9600
+    };
+
+    // --- Drain stale data from the dongle ---
+    // The kernel module's speed change may leave stale bytes in the dongle's
+    // buffer.  Drain them before starting the main loop so the RX counter
+    // starts clean.
+    for _ in 0..10 {
+        let stale = dongle.poll_receive().await?;
+        if stale.is_empty() {
+            break;
+        }
+        debug!(len = stale.len(), "drained stale data from dongle");
+    }
+    dongle.reset_rx_counter();
 
     // --- Create PTY bridge ---
-    let mut pty = pty_bridge::PtyBridge::new(&args.symlink)
-        .context("failed to create PTY bridge")?;
+    let mut pty =
+        pty_bridge::PtyBridge::new(&args.symlink).context("failed to create PTY bridge")?;
 
     info!(
         "ready — open {} in Subsurface (or: minicom -D {})",
@@ -85,11 +144,8 @@ async fn main() -> Result<()> {
     let mut unwrapper = sir_framing::SirUnwrapper::new();
 
     // --- Wrap the PTY master fd for async I/O ---
-    let async_master = AsyncFd::with_interest(
-        pty.master_raw_fd(),
-        Interest::READABLE,
-    )
-    .context("failed to create AsyncFd for PTY master")?;
+    let async_master = AsyncFd::with_interest(pty.master_raw_fd(), Interest::READABLE)
+        .context("failed to create AsyncFd for PTY master")?;
 
     // We don't take ownership of the fd — AsyncFd<RawFd> doesn't close it.
     // The PtyBridge still owns the OwnedFd.
@@ -124,12 +180,28 @@ async fn main() -> Result<()> {
                         // Check for baud rate change before forwarding.
                         if let Some(new_baud) = pty.check_baud_rate_change()? {
                             if new_baud != current_baud {
+                                // A baud rate change means a new client
+                                // (dctool/Subsurface) just opened the PTY.
+                                // Reset the RX counter to flush stale bytes
+                                // that may have desynchronized it.
+                                dongle.reset_rx_counter();
+
                                 match dongle.set_speed(new_baud).await {
                                     Ok(()) => {
+                                        info!(baud = new_baud, "dongle speed changed");
                                         current_baud = new_baud;
                                     }
                                     Err(e) => {
-                                        warn!(baud = new_baud, error = %e, "speed change failed, keeping {}", current_baud);
+                                        // The dongle STALLs the Vendor+Interface
+                                        // workaround.  If the kernel module already
+                                        // set the correct speed, this is harmless.
+                                        warn!(
+                                            baud = new_baud,
+                                            error = %e,
+                                            "USB speed change STALLED — if the ks959_speed kernel \
+                                             module already set this speed, IR comms will still work"
+                                        );
+                                        current_baud = new_baud;
                                     }
                                 }
                             }
