@@ -1,1 +1,0 @@
-savedcmd_ks959_speed.ko := ld -r -m elf_x86_64 -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /usr/src/kernels/7.0.14-101.fc43.x86_64/scripts/module.lds -o ks959_speed.ko ks959_speed.o ks959_speed.mod.o .module-common.o

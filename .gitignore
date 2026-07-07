@@ -1,2 +1,16 @@
 /target
 .idea/
+
+# Kernel module build artifacts
+kmod/*.o
+kmod/*.ko
+kmod/*.mod
+kmod/*.mod.c
+kmod/.*.cmd
+kmod/Module.symvers
+kmod/modules.order
+
+# Reference source trees (large, not part of the project)
+reference/irda/
+reference/libdivecomputer/
+reference/linux/

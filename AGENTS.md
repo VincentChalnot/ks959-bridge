@@ -123,7 +123,6 @@ cargo fmt --check
 
 ## Documentation
 
-- `docs/README.md` — overview and quick start
 - `docs/SETUP.md` — build, environment, hardware, kernel module, LD_PRELOAD shim
 - `docs/PROTOCOL.md` — USB protocol, IrDA SIR, Cressi Donatello wire format
 - `docs/ARCHITECTURE.md` — code structure, modules, event loop, dependencies

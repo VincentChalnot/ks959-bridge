@@ -119,9 +119,7 @@ pub fn wrap_frame(payload: &[u8], extra_bofs: usize) -> Vec<u8> {
     );
 
     // 1. Extra BOFs
-    for _ in 0..extra_bofs {
-        frame.push(XBOF);
-    }
+    frame.extend(std::iter::repeat_n(XBOF, extra_bofs));
 
     // 2. BOF
     frame.push(BOF);
@@ -603,8 +601,7 @@ mod tests {
         let frame = wrap_frame(b"ok", 0);
         // Skip the leading BOF since we're already past it
         let results = unwrapper.process_bytes(&frame[1..]);
-        // The second BOF in the frame resets... wait, after the second BOF
-        // the data and EOF should still be there.
+        // Multiple BOFs are harmless; the last one starts the frame.
         assert_eq!(results.len(), 1);
         assert_eq!(&results[0], b"ok");
     }

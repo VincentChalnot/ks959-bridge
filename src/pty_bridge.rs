@@ -150,6 +150,13 @@ impl PtyBridge {
         let termios = nix::sys::termios::tcgetattr(&pty.slave)?;
         let initial_baud = baudrate_to_u32(nix::sys::termios::cfgetospeed(&termios));
 
+        // Set the slave to raw mode to prevent echo/input-processing between
+        // bridge startup and dctool opening the PTY.
+        let mut raw_termios = termios.clone();
+        nix::sys::termios::cfmakeraw(&mut raw_termios);
+        nix::sys::termios::tcsetattr(&pty.slave, nix::sys::termios::SetArg::TCSANOW, &raw_termios)?;
+        debug!("slave fd set to raw mode");
+
         info!(
             slave = %slave_dev_path.display(),
             symlink = %symlink_path.display(),

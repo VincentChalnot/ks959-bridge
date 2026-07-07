@@ -98,7 +98,8 @@ for each raw byte received:
 ```
 
 **The garbage byte:** Every time `rx_counter` wraps from 0xFF to 0x00, the byte at
-that position decodes to 0x95 and must be discarded. This is every 255th real byte.
+that position is garbage and must be discarded. (The decoded value depends on the raw
+byte received; it is not fixed at 0x95.) This happens every 255th real byte.
 
 **Critical: RX counter desync.** If any RX bytes are lost (USB error, buffer overflow,
 stale data from previous session), the counter gets permanently out of sync and all
@@ -178,7 +179,7 @@ TX: [AA AA AA] [len] [cmd] [data...] [CRC16_LE] [55]
 
 - Header: 3× `0xAA`
 - len: size of data (not including header, cmd, CRC, trailer)
-- CRC: `checksum_crc16_ccitt(packet+3, size+2, 0x000, 0x0000)` — over len+cmd+data
+- CRC: `checksum_crc16_ccitt(packet+3, size+2, 0xFFFF, 0x0000)` — over len+cmd+data
 - Trailer: `0x55`
 - Max payload: 12 bytes (`SZ_PACKET`)
 
