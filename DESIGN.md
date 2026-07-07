@@ -84,7 +84,7 @@ that skips IrLAP.
 | 4 | Flipper Zero (RX capture or TX raw replay) | **Not viable** — TSOP75338TR hardware-locked to 38kHz carrier; IrDA SIR uses 3/16 pulse-width modulation without carrier | $0 |
 | 5 | Bare LED + Arduino GPIO/UART | **Not viable** — produces raw baseband NRZ, not IrDA SIR modulation | ~$5 |
 | 6 | ESP32 + TFDU4101 (hardware IrDA UART mode) | **Proven** by hb9eue for Cressi Leonardo; requires SMD soldering of TFDU4101 | ~$8–15 |
-| 7 | USB-to-Serial (FTDI/CH340/MCP2221A) + TFDU4101 | Should work — architecturally identical to Cressi dock | ~$5–8 |
+| 7 | USB-to-Serial (FTDI/CH340/MCP2221A) + TFDU4101 | **Proven** by Daniel Samarin; architecturally identical to Cressi dock | ~$5–8 |
 | 8 | BLE transport | Supported by libdivecomputer for Goa family; avoids IrDA entirely | BLE adapter |
 | 9 | **libusb bypass of KS-959** | **Chosen path** — no new hardware, no soldering | $0 |
 

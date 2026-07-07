@@ -103,6 +103,10 @@ A TSOP1738 cannot detect IrDA SIR pulses — the pulse width is far below its mi
 detection threshold. IrDA requires a dedicated transceiver chip (TFDU4101) or a
 microcontroller with hardware IrDA mode (ESP32's `UART_IRDA_EN` register bit).
 
+**All TSOP-series receivers are incompatible** — they share the same bandwidth limitation.
+A TSAL6400 IR LED as a direct emitter also won't work without proper IrDA modulation
+circuitry.
+
 ---
 
 ## USB Protocol (Reverse-Engineered)
@@ -478,7 +482,7 @@ else                  → CMD_LOGBOOK (0x21),    logbook entry = 23 bytes
 
 1. Host sends command packet (CMD_DIVE + 2-byte dive number)
 2. Device sends response packet (small, contains total size)
-3. Device sends data packets (512 bytes each + 3-byte header + 2-byte CRC)
+3. Device sends data packets — **516 bytes each:** `[2 bytes total_size_LE] [512 bytes data] [2 bytes CRC16-LE]`
 4. Host sends ACK (0x06) after each data packet
 5. Device sends END (0x04) when done
 6. Host sends final ACK
@@ -836,25 +840,47 @@ void setup() {
 }
 ```
 
-**Known issues:** Echo on TFDU4101 RX (transmitted bytes appear on RX — discard if
-matches last sent byte). sebdbr reported "Unexpected answer byte" errors — may need
-timing adjustments.
+**Known issues:**
+- **Echo on TFDU4101 RX:** Transmitted bytes appear on RX pin. Filter: `if (irdaByte == serialByte) discard;` (hb9eue's approach)
+- **DTR/RTS toggling resets ESP32:** The Leonardo driver (`cressi_leonardo.c`) toggles DTR/RTS which resets ESP32 via its auto-reset circuit. Must comment out DTR/RTS code for USB-serial ESP32 connections. The Goa/Donatello driver clears RTS=0, DTR=0 (no toggling), so no ESP32 reset issue for Donatello.
+- sebdbr reported "Unexpected answer byte" errors — may need timing adjustments.
 
 **Integration:** Bridge mode (ESP32 as transparent serial-to-IrDA converter, host runs
 dctool against `/dev/ttyUSB0`) is simpler than compiling libdivecomputer for ESP32.
 
-### USB-to-Serial + TFDU4101 (Simplest Hardware)
+### USB-to-Serial + TFDU4101 (Simplest Hardware — Proven)
 
 No microcontroller — just a USB serial adapter and an IrDA transceiver. Architecturally
 identical to the Cressi BT Interface dock (which uses an MCP2221A internally, showing up
-as `/dev/ttyACM0`).
+as `/dev/ttyACM0`). **Proven by Daniel Samarin** (see Google Groups thread in references).
 
 **Parts:** FTDI FT232RL / CH340G / CP2102 (~$3–5), TFDU4101 (~$3–5).
+
+**Wiring (4 wires):**
+```
+FTDI TX  ──→ TFDU4101 TXD
+FTDI RX  ←── TFDU4101 RXD
+FTDI VCC ──→ TFDU4101 VCC
+FTDI GND ──→ TFDU4101 GND
+```
 
 **Usage:** `dctool -f goa -m 4 download -o dives.xml /dev/ttyUSB0`
 
 **Risk:** FTDI adapter DTR/RTS behavior on open may cause issues. The Goa driver clears
 them, which should be fine.
+
+### Arduino + TFDU4101 (Feasible)
+
+For those with an Arduino Uno/Nano but no ESP32:
+
+```
+Host PC ──USB──► Arduino (HW UART pins 0/1) ──SoftwareSerial (pins 10/11)──► TFDU4101 ──IR──► Donatello
+```
+
+- Hardware UART for USB, SoftwareSerial for IrDA link
+- 115200 baud SoftwareSerial is tight on AVR but feasible for half-duplex (Cressi protocol is command-response)
+- Must handle echo from TFDU4101 (see below)
+- Sketch bridges bytes between the two serial ports
 
 ### BLE Transport
 
@@ -866,6 +892,9 @@ Avoids the entire IrDA problem but requires a BLE adapter.
 bluetoothctl scan on
 dctool scan -t ble
 ```
+
+**Known issue:** The Android Subsurface app may check the BT MAC address to match the
+device type — hb9eue couldn't get Android BLE working with the ESP32 bridge.
 
 ---
 

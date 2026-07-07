@@ -115,7 +115,7 @@ If irda2tty doesn't work for your setup, other approaches exist:
 | Approach | Cost | Status |
 |----------|------|--------|
 | ESP32 + TFDU4101 (hardware IrDA UART mode) | ~$8–15 | Proven by hb9eue |
-| USB-to-Serial (FTDI/CH340) + TFDU4101 | ~$5–8 | Should work (same architecture as Cressi dock) |
+| USB-to-Serial (FTDI/CH340) + TFDU4101 | ~$5–8 | Proven by Daniel Samarin |
 | BLE transport (no IrDA hardware needed) | BLE adapter | Supported by libdivecomputer |
 | Out-of-tree kernel modules (`github.com/cschramm/irda`) | $0 | Works for other IrDA devices; dead end for Donatello specifically |
 
