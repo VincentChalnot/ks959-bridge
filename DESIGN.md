@@ -76,17 +76,17 @@ that skips IrLAP.
 
 ## Approaches Evaluated
 
-| # | Approach | Verdict | Cost |
-|---|----------|---------|------|
-| 1 | Official Cressi BT/USB dock | Works but expensive; uses MCP2221A + IrDA transceiver internally | ~$80–120 |
-| 2 | KS-959 + kernel IrDA stack (VM) | **Dead end** — Donatello never completes IrLAP handshake | $0 |
-| 3 | Out-of-tree IrDA kernel modules (`cschramm/irda`) | Viable for other IrDA devices (Uwatec, etc.), same IrLAP dead end for Donatello | $0 |
-| 4 | Flipper Zero (RX capture or TX raw replay) | **Not viable** — TSOP75338TR hardware-locked to 38kHz carrier; IrDA SIR uses 3/16 pulse-width modulation without carrier | $0 |
-| 5 | Bare LED + Arduino GPIO/UART | **Not viable** — produces raw baseband NRZ, not IrDA SIR modulation | ~$5 |
-| 6 | ESP32 + TFDU4101 (hardware IrDA UART mode) | **Proven** by hb9eue for Cressi Leonardo; requires SMD soldering of TFDU4101 | ~$8–15 |
-| 7 | USB-to-Serial (FTDI/CH340/MCP2221A) + TFDU4101 | **Proven** by Daniel Samarin; architecturally identical to Cressi dock | ~$5–8 |
-| 8 | BLE transport | Supported by libdivecomputer for Goa family; avoids IrDA entirely | BLE adapter |
-| 9 | **libusb bypass of KS-959** | **Chosen path** — no new hardware, no soldering | $0 |
+| # | Approach                                          | Verdict                                                                                                                  | Cost        |
+|---|---------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|-------------|
+| 1 | Official Cressi BT/USB dock                       | Works but expensive; uses MCP2221A + IrDA transceiver internally                                                         | ~$80–120    |
+| 2 | KS-959 + kernel IrDA stack (VM)                   | **Dead end** — Donatello never completes IrLAP handshake                                                                 | $0          |
+| 3 | Out-of-tree IrDA kernel modules (`cschramm/irda`) | Viable for other IrDA devices (Uwatec, etc.), same IrLAP dead end for Donatello                                          | $0          |
+| 4 | Flipper Zero (RX capture or TX raw replay)        | **Not viable** — TSOP75338TR hardware-locked to 38kHz carrier; IrDA SIR uses 3/16 pulse-width modulation without carrier | $0          |
+| 5 | Bare LED + Arduino GPIO/UART                      | **Not viable** — produces raw baseband NRZ, not IrDA SIR modulation                                                      | ~$5         |
+| 6 | ESP32 + TFDU4101 (hardware IrDA UART mode)        | **Proven** by hb9eue for Cressi Leonardo; requires SMD soldering of TFDU4101                                             | ~$8–15      |
+| 7 | USB-to-Serial (FTDI/CH340/MCP2221A) + TFDU4101    | **Proven** by Daniel Samarin; architecturally identical to Cressi dock                                                   | ~$5–8       |
+| 8 | BLE transport                                     | Supported by libdivecomputer for Goa family; avoids IrDA entirely                                                        | BLE adapter |
+| 9 | **libusb bypass of KS-959**                       | **Chosen path** — no new hardware, no soldering                                                                          | $0          |
 
 **Why approach #9 was selected:** Zero additional cost, uses existing hardware, avoids
 the proven IrLAP dead end, avoids SMD soldering risk. The trade-off is reverse-engineering
@@ -156,6 +156,7 @@ libusb C).
 interrupt endpoint but it's a dummy):
 
 #### TX (host -> dongle)
+
 ```
 bmRequestType: USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE  (0x21)
 bRequest:      0x09
@@ -166,15 +167,18 @@ data:          obfuscated + padded payload
 ```
 
 Obfuscation algorithm (from ks959-sir.c):
+
 ```
 lookup = "wangshuofei19710"
 xor_mask = lookup[(cleartext_len & 0x0f) ^ 0x06] ^ 0x55
 for each byte: output = input ^ xor_mask
 padding: align to 8 bytes + 16 bytes overhead = ((len + 7) & ~7) + 0x10
 ```
+
 Max cleartext per fragment: `(256 & ~7) - 16 = 240 bytes`. Fragment if larger.
 
 #### RX (dongle -> host) — via polling
+
 ```
 bmRequestType: USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE  (0xA1)
 bRequest:      0x01
@@ -184,6 +188,7 @@ wLength:       0x0800  (2048 byte buffer)
 ```
 
 De-obfuscation:
+
 ```
 rx_counter: u8, starts at 0, persists across ALL reads for the session
 for each byte:
@@ -194,6 +199,7 @@ for each byte:
 ```
 
 #### Speed Change
+
 ```
 bmRequestType: 0x21
 bRequest:      0x09
@@ -202,6 +208,7 @@ wIndex:        0x0001
 wLength:       0x0008
 data:          [baudrate_le32, flags, 0, 0, 0]
 ```
+
 Where `flags = 0x03` (8 data bits). Supported: 2400, 9600, 19200, 38400, 57600, 115200.
 
 **Polling interval:** 10ms for RX (same as kernel driver's URB resubmission pattern).
@@ -222,11 +229,13 @@ impl KingsunDongle {
 ### 2. `sir_framing` — IrDA SIR Async Wrapper
 
 Constants:
+
 - `BOF = 0xC0`, `EOF = 0xC1`, `CE = 0x7D`, `IRDA_TRANS = 0x20`, `XBOF = 0xFF`
 - `INIT_FCS = 0xFFFF`, `GOOD_FCS = 0xF0B8`
 - CRC: CRC-CCITT (same polynomial as `crc_ccitt` in Linux, which is CRC-CCITT-FALSE / polynomial 0x1021)
 
 #### Wrap (TX)
+
 ```
 output = [XBOF * num_xbofs] [BOF] [stuff(payload_bytes)] [stuff(~FCS_lo)] [stuff(~FCS_hi)] [EOF]
 
@@ -236,15 +245,18 @@ stuff(byte):
 ```
 
 #### Unwrap (RX) — state machine
+
 States: `OutsideFrame`, `BeginFrame`, `LinkEscape`, `InsideFrame`
 
 Process each byte:
+
 - `BOF` -> reset to BeginFrame, clear buffer, init FCS
 - `EOF` -> check FCS == GOOD_FCS, if good emit frame (minus 2 CRC bytes), go to OutsideFrame
 - `CE`  -> enter LinkEscape
 - other -> if LinkEscape: byte ^= 0x20, go to InsideFrame; if InsideFrame: append, update FCS
 
 #### Interface
+
 ```rust
 pub fn wrap_frame(payload: &[u8], extra_bofs: usize) -> Vec<u8>;
 pub struct Unwrapper { state, buffer, fcs }
@@ -256,6 +268,7 @@ impl Unwrapper {
 ### 3. `pty_bridge` — PTY Creation and Termios Monitoring
 
 #### PTY creation
+
 Use `nix::pty::openpty()` to create master/slave pair. Symlink slave path to `/tmp/cressi-irda`.
 Set master to non-blocking. Configure slave with initial raw mode settings.
 
@@ -274,6 +287,7 @@ since the baud rate changes exactly once per session (when libdivecomputer calls
 session start).
 
 #### Interface
+
 ```rust
 pub struct PtyBridge {
     master_fd: OwnedFd,
@@ -321,6 +335,7 @@ or use `nusb`'s blocking wrappers if available. If blocking isn't available, we 
 
 Actually — reconsidering: since `nusb` requires an async executor, and we need to poll
 both the PTY fd and USB simultaneously, we'll use `tokio` with:
+
 - PTY I/O via `tokio::io::AsyncFd` wrapping the master fd
 - USB I/O via `nusb` async API
 - A `tokio::select!` loop
@@ -350,6 +365,7 @@ data availability to the PTY.
 ## Logging
 
 `tracing` with `tracing-subscriber` (fmt layer):
+
 - `TRACE`: every USB control transfer (hex dump), every PTY read/write
 - `DEBUG`: SIR frame boundaries, baud rate changes, dongle poll results
 - `INFO`:  dongle found, PTY created, speed changes
@@ -361,6 +377,7 @@ Default level: `INFO`. Set `RUST_LOG=trace` for full byte-level debugging.
 ## Test Plan
 
 ### Unit Tests (no hardware)
+
 1. **SIR framing round-trip:** wrap arbitrary payloads, verify BOF/EOF/CRC present; unwrap
    and verify identical payload recovered. Test edge cases: payload containing BOF/EOF/CE bytes.
 2. **Kingsun obfuscation round-trip:** obfuscate test data, verify padding and XOR; check
@@ -370,6 +387,7 @@ Default level: `INFO`. Set `RUST_LOG=trace` for full byte-level debugging.
 4. **CRC-CCITT:** verify against known CRC values.
 
 ### Integration Tests (with hardware)
+
 1. **USB enumeration:** Open dongle, verify VID/PID, claim interface.
 2. **Speed change:** Send speed change control transfer, verify no USB error.
 3. **TX loopback:** Send known data, verify control transfer succeeds.
@@ -378,6 +396,7 @@ Default level: `INFO`. Set `RUST_LOG=trace` for full byte-level debugging.
 6. **End-to-end:** Run Subsurface against `/tmp/cressi-irda` with Donatello positioned near dongle.
 
 ### Hardware test sequence
+
 1. Validate USB communication (open, control transfers, bulk data)
 2. Validate SIR framing round-trip or raw passthrough
 3. Validate PTY bridge in isolation (cat/minicom)

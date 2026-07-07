@@ -74,6 +74,7 @@ Negotiated speed: Low Speed (1Mbps)
 ```
 
 **Critical facts:**
+
 - **Low-speed USB device** — max packet size 8 bytes for control transfers
 - **Only 1 interface** (interface 0) — this matters for the usbfs bug (see below)
 - **Interrupt endpoint 0x81 is a DUMMY** — never used for actual data
@@ -91,13 +92,13 @@ Negotiated speed: Low Speed (1Mbps)
 IrDA SIR (Serial Infrared) is NOT the same as 38kHz TV remote IR. This is why components
 like TSOP1738 or the Flipper Zero's TSOP75338TR cannot interact with IrDA devices:
 
-| Aspect | IrDA SIR | TV Remote (TSOP1738) |
-|--------|----------|---------------------|
-| Carrier | Pulse at 3/16 of bit period | 38kHz continuous |
-| Pulse width (9600 baud) | ~19.5µs | ~263µs min burst |
-| Pulse width (115200 baud) | ~1.6µs | N/A |
-| Framing | UART (start+8data+stop) | Burst coding |
-| Component | IrDA transceiver (TFDU4101) | TSOP1738 module |
+| Aspect                    | IrDA SIR                    | TV Remote (TSOP1738) |
+|---------------------------|-----------------------------|----------------------|
+| Carrier                   | Pulse at 3/16 of bit period | 38kHz continuous     |
+| Pulse width (9600 baud)   | ~19.5µs                     | ~263µs min burst     |
+| Pulse width (115200 baud) | ~1.6µs                      | N/A                  |
+| Framing                   | UART (start+8data+stop)     | Burst coding         |
+| Component                 | IrDA transceiver (TFDU4101) | TSOP1738 module      |
 
 A TSOP1738 cannot detect IrDA SIR pulses — the pulse width is far below its minimum burst
 detection threshold. IrDA requires a dedicated transceiver chip (TFDU4101) or a
@@ -213,6 +214,7 @@ struct ks959_speedparams {
 ```
 
 Flags field bits:
+
 ```
 bits [1:0] = data bits    (0x00=5, 0x01=6, 0x02=7, 0x03=8)
 bit  [3]   = stop bits    (0x00=1, 0x08=2)
@@ -250,6 +252,7 @@ case USB_RECIP_INTERFACE:
 ```
 
 For `wIndex=1`:
+
 1. `findintfep(dev, 1)` → searches for endpoint address 0x01. The device only has
    endpoint 0x81 (IN). 0x81 ≠ 0x01 → returns `-ENOENT`.
 2. `checkintf(ps, 1)` → checks if interface 1 is claimed. The device only has
@@ -262,11 +265,11 @@ The original kernel driver (`ks959-sir.c`) bypasses this because kernel drivers 
 
 ### What Was Tried
 
-| Attempt | bRequestType | Kernel | Dongle | Result |
-|---------|-------------|--------|--------|--------|
-| Original: `Class + Interface` | `0x21` | **REJECTS** (ENOENT → "cancelled") | Would accept | Kernel blocks it |
-| `Class + Device` | `0x20` | Passes (no interface check for Device recipient) | **STALL** | Dongle checks recipient bits |
-| `Vendor + Interface` | `0x41` | Passes (vendor-type early return in check_ctrlrecip) | **UNTESTED** | In code now, needs hardware test |
+| Attempt                       | bRequestType | Kernel                                               | Dongle       | Result                           |
+|-------------------------------|--------------|------------------------------------------------------|--------------|----------------------------------|
+| Original: `Class + Interface` | `0x21`       | **REJECTS** (ENOENT → "cancelled")                   | Would accept | Kernel blocks it                 |
+| `Class + Device`              | `0x20`       | Passes (no interface check for Device recipient)     | **STALL**    | Dongle checks recipient bits     |
+| `Vendor + Interface`          | `0x41`       | Passes (vendor-type early return in check_ctrlrecip) | **UNTESTED** | In code now, needs hardware test |
 
 ### Why Each Bypass Fails or Might Work
 
@@ -293,15 +296,15 @@ The original kernel driver (`ks959-sir.c`) bypasses this because kernel drivers 
    the kernel check while keeping the recipient bits the dongle wants.
 
 2. **If `0x41` also STALL's** (firmware checks full bRequestType == 0x21):
-   - **Write a minimal kernel module** that does only the speed change via
-     `usb_control_msg()` and exposes a sysfs/ioctl interface
-   - **eBPF hook** on `check_ctrlrecip` to return 0 for this specific VID/PID
-   - **Avoid speed changes entirely:** If you can ensure the dongle is already at
-     the right speed (e.g., if a kernel driver previously set it), skip the speed
-     change. The kernel driver sets 9600 on probe; if Donatello needs 115200,
-     you're stuck.
-   - **Patch libdivecomputer** to start at 9600 instead of 115200 — impractical
-     since the Donatello firmware runs at 115200.
+    - **Write a minimal kernel module** that does only the speed change via
+      `usb_control_msg()` and exposes a sysfs/ioctl interface
+    - **eBPF hook** on `check_ctrlrecip` to return 0 for this specific VID/PID
+    - **Avoid speed changes entirely:** If you can ensure the dongle is already at
+      the right speed (e.g., if a kernel driver previously set it), skip the speed
+      change. The kernel driver sets 9600 on probe; if Donatello needs 115200,
+      you're stuck.
+    - **Patch libdivecomputer** to start at 9600 instead of 115200 — impractical
+      since the Donatello firmware runs at 115200.
 
 ### Key Kernel Code Path
 
@@ -333,6 +336,7 @@ No BOF/EOF/escape/CRC wrapping. The default mode is **raw passthrough** (`--sir-
 is off by default).
 
 Evidence:
+
 - libdivecomputer registers the Donatello as `DC_TRANSPORT_SERIAL`
 - Users communicate with it using ESP32 + TFDU4101 (physical-layer-only transceiver)
 - The SIR wrapping in `ks959-sir.c` was part of the kernel's IrDA protocol stack,
@@ -438,14 +442,14 @@ TX: [AA AA AA] [len] [cmd] [data...] [CRC16_LE] [55]
 
 ### Commands
 
-| Command | Code | Description |
-|---------|------|-------------|
-| `CMD_VERSION` | `0x00` | Get device version/ID |
-| `CMD_SET_TIME` | `0x13` | Set device time |
-| `CMD_EXIT_PCLINK` | `0x1D` | Exit PC-link mode |
-| `CMD_LOGBOOK` | `0x21` | Download logbook (firmware < 200, 23-byte entries) |
-| `CMD_DIVE` | `0x22` | Download dive data |
-| `CMD_LOGBOOK_V4` | `0x23` | Logbook (firmware >= 200, 15-byte entries) |
+| Command           | Code   | Description                                        |
+|-------------------|--------|----------------------------------------------------|
+| `CMD_VERSION`     | `0x00` | Get device version/ID                              |
+| `CMD_SET_TIME`    | `0x13` | Set device time                                    |
+| `CMD_EXIT_PCLINK` | `0x1D` | Exit PC-link mode                                  |
+| `CMD_LOGBOOK`     | `0x21` | Download logbook (firmware < 200, 23-byte entries) |
+| `CMD_DIVE`        | `0x22` | Download dive data                                 |
+| `CMD_LOGBOOK_V4`  | `0x23` | Logbook (firmware >= 200, 15-byte entries)         |
 
 ### Protocol Constants
 
@@ -463,13 +467,13 @@ FP_SIZE  = 6       // fingerprint size
 
 The first response to CMD_VERSION contains an 11-byte device ID:
 
-| Offset | Size | Field |
-|--------|------|-------|
-| 0–3 | 4 | Serial number (uint32_le) |
-| 4 | 1 | Model number |
-| 5–6 | 2 | Firmware version (uint16_le) |
-| 7–8 | 2 | Reserved/padding |
-| 9–10 | 2 | Data format version (uint16_le) — only if id_size == 11 |
+| Offset | Size | Field                                                   |
+|--------|------|---------------------------------------------------------|
+| 0–3    | 4    | Serial number (uint32_le)                               |
+| 4      | 1    | Model number                                            |
+| 5–6    | 2    | Firmware version (uint16_le)                            |
+| 7–8    | 2    | Reserved/padding                                        |
+| 9–10   | 2    | Data format version (uint16_le) — only if id_size == 11 |
 
 ### Firmware Version → Logbook Format
 
@@ -490,6 +494,7 @@ else                  → CMD_LOGBOOK (0x21),    logbook entry = 23 bytes
 ### BLE Variant
 
 The Donatello also supports BLE. Different commands are used:
+
 - `CMD_LOGBOOK_BLE` = 0x02
 - `CMD_DIVE_BLE` = 0x03
 - BLE characteristics: Nordic UART Service (`6E400003/04/05-B5A3-...`)
@@ -511,13 +516,13 @@ Leonardo (`cressi_leonardo.c`).
 
 ### Other Cressi Models
 
-| Model | Family | Notes |
-|-------|--------|-------|
-| Donatello | `DC_FAMILY_CRESSI_GOA` (model 4) | This project's target |
-| Giotto | `DC_FAMILY_CRESSI_GOA` | Same family, different model number |
-| Newton, Drake, Cartesio, Goa, Neon, Nepto | `DC_FAMILY_CRESSI_GOA` or `DC_FAMILY_CRESSI_EDY` | Same protocol family |
-| Leonardo | `DC_FAMILY_CRESSI_LEONARDO` | Requires DTR/RTS toggles for original cradle |
-| Edy | `DC_FAMILY_CRESSI_EDY` | Separate family |
+| Model                                     | Family                                           | Notes                                        |
+|-------------------------------------------|--------------------------------------------------|----------------------------------------------|
+| Donatello                                 | `DC_FAMILY_CRESSI_GOA` (model 4)                 | This project's target                        |
+| Giotto                                    | `DC_FAMILY_CRESSI_GOA`                           | Same family, different model number          |
+| Newton, Drake, Cartesio, Goa, Neon, Nepto | `DC_FAMILY_CRESSI_GOA` or `DC_FAMILY_CRESSI_EDY` | Same protocol family                         |
+| Leonardo                                  | `DC_FAMILY_CRESSI_LEONARDO`                      | Requires DTR/RTS toggles for original cradle |
+| Edy                                       | `DC_FAMILY_CRESSI_EDY`                           | Separate family                              |
 
 ### Communication Flow
 
@@ -542,6 +547,7 @@ dctool -v -l cressi.log -f goa -m 4 download -o dives.xml /dev/ircomm0
 ```
 
 Flags:
+
 - `-v` — verbose (shows INFO/ERROR logs)
 - `-l cressi.log` — log file
 - `-f goa` — device family (`DC_FAMILY_CRESSI_GOA`)
@@ -562,29 +568,29 @@ dctool parse -i dives.xml                      # parse previously downloaded div
 
 - **XML** (default): all dives in one file
 - **RAW** (`-f raw`): each dive as separate binary file
-  - Template placeholders: `%n` (4-digit number), `%f` (fingerprint hex), `%t` (timestamp)
+    - Template placeholders: `%n` (4-digit number), `%f` (fingerprint hex), `%t` (timestamp)
 
 ### Family Name Mapping
 
 The `-f` flag takes a string name (not the full constant):
 
-| String | Constant | Default Model |
-|--------|----------|---------------|
-| `goa` | `DC_FAMILY_CRESSI_GOA` | 2 |
-| `leonardo` | `DC_FAMILY_CRESSI_LEONARDO` | 1 |
-| `edy` | `DC_FAMILY_CRESSI_EDY` | 0x08 |
+| String     | Constant                    | Default Model |
+|------------|-----------------------------|---------------|
+| `goa`      | `DC_FAMILY_CRESSI_GOA`      | 2             |
+| `leonardo` | `DC_FAMILY_CRESSI_LEONARDO` | 1             |
+| `edy`      | `DC_FAMILY_CRESSI_EDY`      | 0x08          |
 
 The `-m` flag overrides the default model number. For the Donatello: `-f goa -m 4`.
 
 ### Source Code Locations
 
-| File | Description |
-|------|-------------|
-| `src/cressi_goa.c` | Goa/Donatello driver |
-| `src/cressi_goa_parser.c` | Dive data parser |
-| `src/cressi_goa.h` | Header |
-| `src/descriptor.c` | Device descriptor table |
-| `examples/common.c` | Family name mapping |
+| File                      | Description             |
+|---------------------------|-------------------------|
+| `src/cressi_goa.c`        | Goa/Donatello driver    |
+| `src/cressi_goa_parser.c` | Dive data parser        |
+| `src/cressi_goa.h`        | Header                  |
+| `src/descriptor.c`        | Device descriptor table |
+| `examples/common.c`       | Family name mapping     |
 
 ---
 
@@ -620,6 +626,7 @@ Overhead is negligible — baud rate changes once per session.
 ### libdivecomputer Compatibility
 
 libdivecomputer's `serial_posix.c` with `ENABLE_PTY` tolerates `EINVAL`/`ENOTTY` from:
+
 - `TIOCEXCL` (exclusive access)
 - `TIOCMBIS` (DTR/RTS control)
 - `TIOCGSERIAL` (serial port info)
@@ -646,13 +653,13 @@ src/
 Single-threaded `tokio` runtime with `select!` over three sources:
 
 1. **PTY master readable** (`AsyncFd<RawFd>`) — data from Subsurface
-   - Check for baud rate change via `tcgetattr()` polling
-   - Forward data to dongle (optionally SIR-wrapped)
+    - Check for baud rate change via `tcgetattr()` polling
+    - Forward data to dongle (optionally SIR-wrapped)
 
 2. **USB RX poll timer** (10ms `tokio::time::interval`) — data from IR
-   - Poll dongle for received bytes
-   - Deobfuscate, optionally SIR-unwrap
-   - Write to PTY master
+    - Poll dongle for received bytes
+    - Deobfuscate, optionally SIR-unwrap
+    - Write to PTY master
 
 3. **Signal handler** (SIGINT/SIGTERM) — clean shutdown
 
@@ -685,22 +692,22 @@ crc = "3"              # in Cargo.toml but NOT USED — we compute CRC at compil
 
 ### Working (45/45 tests pass, 0 warnings, compiles in release)
 
-| Component | Tests | Status |
-|-----------|-------|--------|
-| SIR framing (CRC, wrap, unwrap, state machine) | 24 | All pass |
-| USB obfuscation/deobfuscation/fragmentation | 14 | All pass, verified with hand-calculated vectors |
-| PTY bridge (create, symlink, read/write, baud detection) | 7 | All pass |
-| Main event loop | — | Compiles, CLI works |
-| USB device enumeration + interface claim | — | Works on hardware |
+| Component                                                | Tests | Status                                          |
+|----------------------------------------------------------|-------|-------------------------------------------------|
+| SIR framing (CRC, wrap, unwrap, state machine)           | 24    | All pass                                        |
+| USB obfuscation/deobfuscation/fragmentation              | 14    | All pass, verified with hand-calculated vectors |
+| PTY bridge (create, symlink, read/write, baud detection) | 7     | All pass                                        |
+| Main event loop                                          | —     | Compiles, CLI works                             |
+| USB device enumeration + interface claim                 | —     | Works on hardware                               |
 
 ### NOT Working
 
-| Component | Problem | Status |
-|-----------|---------|--------|
-| **Speed change** | `check_ctrlrecip` rejects bRequestType=0x21 with wIndex=1 | **BLOCKER** |
-| | bRequestType=0x20 (Class+Device): kernel passes, dongle STALL's | Failed |
-| | bRequestType=0x41 (Vendor+Interface): kernel passes, dongle untested | **Current code** |
-| End-to-end with Subsurface | Blocked by speed change | Not tested |
+| Component                  | Problem                                                              | Status           |
+|----------------------------|----------------------------------------------------------------------|------------------|
+| **Speed change**           | `check_ctrlrecip` rejects bRequestType=0x21 with wIndex=1            | **BLOCKER**      |
+|                            | bRequestType=0x20 (Class+Device): kernel passes, dongle STALL's      | Failed           |
+|                            | bRequestType=0x41 (Vendor+Interface): kernel passes, dongle untested | **Current code** |
+| End-to-end with Subsurface | Blocked by speed change                                              | Not tested       |
 
 ### Untested
 
@@ -802,6 +809,7 @@ ssh 192.168.122.26 "ifconfig irda0"
 ### Troubleshooting
 
 If `irda0` doesn't exist:
+
 1. Check USB device: `lsusb | grep 07d0`
 2. Reload modules: `rmmod ks959_sir ircomm_tty ircomm irda && modprobe irda && modprobe ks959_sir`
 3. Re-attach USB device via virsh
@@ -820,6 +828,7 @@ hardware IrDA mode (`UART_IRDA_EN` register bit) that handles SIR modulation aut
 **Parts:** ESP32 dev board (~$5–8), TFDU4101 IrDA transceiver (~$3–5), 100Ω resistor.
 
 **Wiring:**
+
 ```
 ESP32 GPIO 17 (TXD2) ──→ TFDU4101 TXD
 ESP32 GPIO 16 (RXD2) ←── TFDU4101 RXD
@@ -828,6 +837,7 @@ ESP32 GND ─────────────→ TFDU4101 GND
 ```
 
 **Code (from hb9eue):**
+
 ```cpp
 HardwareSerial irda(2); // GPIO 17: TXD2, GPIO 16: RXD2
 void setup() {
@@ -841,8 +851,12 @@ void setup() {
 ```
 
 **Known issues:**
-- **Echo on TFDU4101 RX:** Transmitted bytes appear on RX pin. Filter: `if (irdaByte == serialByte) discard;` (hb9eue's approach)
-- **DTR/RTS toggling resets ESP32:** The Leonardo driver (`cressi_leonardo.c`) toggles DTR/RTS which resets ESP32 via its auto-reset circuit. Must comment out DTR/RTS code for USB-serial ESP32 connections. The Goa/Donatello driver clears RTS=0, DTR=0 (no toggling), so no ESP32 reset issue for Donatello.
+
+- **Echo on TFDU4101 RX:** Transmitted bytes appear on RX pin. Filter: `if (irdaByte == serialByte) discard;` (hb9eue's
+  approach)
+- **DTR/RTS toggling resets ESP32:** The Leonardo driver (`cressi_leonardo.c`) toggles DTR/RTS which resets ESP32 via
+  its auto-reset circuit. Must comment out DTR/RTS code for USB-serial ESP32 connections. The Goa/Donatello driver
+  clears RTS=0, DTR=0 (no toggling), so no ESP32 reset issue for Donatello.
 - sebdbr reported "Unexpected answer byte" errors — may need timing adjustments.
 
 **Integration:** Bridge mode (ESP32 as transparent serial-to-IrDA converter, host runs
@@ -857,6 +871,7 @@ as `/dev/ttyACM0`). **Proven by Daniel Samarin** (see Google Groups thread in re
 **Parts:** FTDI FT232RL / CH340G / CP2102 (~$3–5), TFDU4101 (~$3–5).
 
 **Wiring (4 wires):**
+
 ```
 FTDI TX  ──→ TFDU4101 TXD
 FTDI RX  ←── TFDU4101 RXD
@@ -913,22 +928,22 @@ device type — hb9eue couldn't get Android BLE working with the ESP32 bridge.
 
 ### Source Code
 
-| File | Lines | Description |
-|------|-------|-------------|
-| `src/main.rs` | 233 | Tokio event loop, CLI, signal handling |
-| `src/usb_dongle.rs` | 559 | Kingsun protocol + 14 tests |
-| `src/sir_framing.rs` | 663 | SIR wrap/unwrap + CRC + 24 tests |
-| `src/pty_bridge.rs` | 424 | PTY pair + symlink + baud polling + 7 tests |
-| `Cargo.toml` | 31 | Dependencies |
+| File                 | Lines | Description                                 |
+|----------------------|-------|---------------------------------------------|
+| `src/main.rs`        | 233   | Tokio event loop, CLI, signal handling      |
+| `src/usb_dongle.rs`  | 559   | Kingsun protocol + 14 tests                 |
+| `src/sir_framing.rs` | 663   | SIR wrap/unwrap + CRC + 24 tests            |
+| `src/pty_bridge.rs`  | 424   | PTY pair + symlink + baud polling + 7 tests |
+| `Cargo.toml`         | 31    | Dependencies                                |
 
 ### Reference Material
 
-| File | Description |
-|------|-------------|
-| `reference/ks959-sir.c` | Original kernel driver — canonical USB protocol reference |
-| `reference/libdivecomputer/src/cressi_goa.c` | Donatello protocol (commands, framing, CRC) |
-| `reference/libdivecomputer/src/serial_posix.c` | ENABLE_PTY handling, ioctl tolerance |
-| `reference/irda/` | Linux IrDA subsystem (wrapper.c state machine, CRC) |
+| File                                           | Description                                               |
+|------------------------------------------------|-----------------------------------------------------------|
+| `reference/ks959-sir.c`                        | Original kernel driver — canonical USB protocol reference |
+| `reference/libdivecomputer/src/cressi_goa.c`   | Donatello protocol (commands, framing, CRC)               |
+| `reference/libdivecomputer/src/serial_posix.c` | ENABLE_PTY handling, ioctl tolerance                      |
+| `reference/irda/`                              | Linux IrDA subsystem (wrapper.c state machine, CRC)       |
 
 ### Build & Run
 
