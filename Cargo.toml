@@ -1,5 +1,5 @@
 [package]
-name = "irda2tty"
+name = "ks959-bridge"
 version = "0.1.0"
 edition = "2021"
 description = "Userspace IrDA SIR driver for Kingsun KS-959 USB dongle, exposing a PTY for libdivecomputer"

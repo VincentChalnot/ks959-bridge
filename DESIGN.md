@@ -1,4 +1,4 @@
-# irda2tty Design Document
+# ks959-bridge Design Document
 
 ## Problem Statement
 
@@ -40,7 +40,7 @@ layers 1 and 5 in hardware:
 
 The Cressi Donatello only implements the physical layer + minimal discovery (XID). It
 does **not** implement the full IrLAP connection protocol. This is why the kernel path
-fails and why irda2tty bypasses layers 2–4 entirely, talking directly to the dongle
+fails and why ks959-bridge bypasses layers 2–4 entirely, talking directly to the dongle
 over USB.
 
 ## Why the Kernel IrDA Path Is a Dead End
@@ -103,7 +103,7 @@ firmware may require minimal IrLAP negotiation before transmitting raw bytes.
                                |
                                v
  +---------------------------------------------------------+
- |                     irda2tty                             |
+ |                     ks959-bridge                             |
  |                                                          |
  |  +-------------------+     +--------------------------+  |
  |  |   pty_bridge       |<-->|   main.rs event loop     |  |

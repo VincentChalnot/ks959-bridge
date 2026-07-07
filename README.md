@@ -1,4 +1,4 @@
-# irda2tty
+# ks959-bridge
 
 Userspace IrDA SIR driver for the **Kingsun KS-959** USB dongle (VID `07d0`, PID `4959`).  
 Bridges the dongle to a PTY so [libdivecomputer](https://libdivecomputer.org/) / [Subsurface](https://subsurface-divelog.org/) can talk to a **Cressi Donatello** dive computer as if using a normal serial port.
@@ -17,7 +17,7 @@ cargo build --release
 
 ```
 # Plug in the Kingsun KS-959 dongle, then:
-sudo ./target/release/irda2tty
+sudo ./target/release/ks959-bridge
 
 # In Subsurface: select /tmp/cressi-irda as the serial port
 ```
@@ -36,7 +36,7 @@ The program creates a PTY and symlinks it to `/tmp/cressi-irda` (configurable wi
 
 ### Baud rate
 
-The dongle starts at the initial baud rate (default 9600). When the application (libdivecomputer) calls `tcsetattr()` to change speed (typically to 115200 for the Donatello), irda2tty detects the change and reconfigures the dongle automatically.
+The dongle starts at the initial baud rate (default 9600). When the application (libdivecomputer) calls `tcsetattr()` to change speed (typically to 115200 for the Donatello), ks959-bridge detects the change and reconfigures the dongle automatically.
 
 ### SIR framing
 
@@ -45,8 +45,8 @@ The Cressi Donatello uses `DC_TRANSPORT_SERIAL` in libdivecomputer — it sends 
 ### Logging
 
 ```
-RUST_LOG=debug ./target/release/irda2tty    # protocol events
-RUST_LOG=trace ./target/release/irda2tty    # every USB transfer (hex dumps)
+RUST_LOG=debug ./target/release/ks959-bridge    # protocol events
+RUST_LOG=trace ./target/release/ks959-bridge    # every USB transfer (hex dumps)
 ```
 
 ## Architecture
@@ -56,7 +56,7 @@ RUST_LOG=trace ./target/release/irda2tty    # every USB transfer (hex dumps)
          |
     /tmp/cressi-irda (PTY slave)
          |
-  +----- irda2tty -----+
+  +----- ks959-bridge -----+
   | pty_bridge          |  PTY master, non-blocking I/O, baud rate polling
   | usb_dongle          |  Kingsun KS-959: obfuscation, fragmentation, USB control transfers
   | sir_framing         |  IrDA SIR wrap/unwrap (optional, off by default)
@@ -110,7 +110,7 @@ The `-f goa` flag selects the Cressi Goa family; `-m 4` selects the Donatello mo
 
 ## Alternatives
 
-If irda2tty doesn't work for your setup, other approaches exist:
+If ks959-bridge doesn't work for your setup, other approaches exist:
 
 | Approach | Cost | Status |
 |----------|------|--------|

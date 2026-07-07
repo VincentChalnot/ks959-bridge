@@ -1,4 +1,4 @@
-# irda2tty — Complete Knowledge Base
+# ks959-bridge — Complete Knowledge Base
 
 Everything learned while building a userspace IrDA SIR driver for the Kingsun KS-959
 USB dongle, bridging it to a PTY for libdivecomputer/Subsurface to talk to a Cressi
@@ -714,7 +714,7 @@ crc = "3"              # in Cargo.toml but NOT USED — we compute CRC at compil
 ## VM/USB Passthrough Setup (for kernel IrDA testing)
 
 This project uses a VM only for testing the kernel IrDA stack (to confirm the IrLAP dead
-end). The production irda2tty tool runs on the host directly.
+end). The production ks959-bridge tool runs on the host directly.
 
 ### Environment
 
@@ -935,12 +935,12 @@ device type — hb9eue couldn't get Android BLE working with the ESP32 bridge.
 ```bash
 cargo test                              # 45 tests
 cargo build --release                   # ~2.7MB binary
-sudo ./target/release/irda2tty          # run (needs USB access)
-sudo ./target/release/irda2tty --help   # CLI options
+sudo ./target/release/ks959-bridge          # run (needs USB access)
+sudo ./target/release/ks959-bridge --help   # CLI options
 
 # Debug logging:
-RUST_LOG=debug sudo ./target/release/irda2tty
-RUST_LOG=trace sudo ./target/release/irda2tty    # hex dumps of every USB transfer
+RUST_LOG=debug sudo ./target/release/ks959-bridge
+RUST_LOG=trace sudo ./target/release/ks959-bridge    # hex dumps of every USB transfer
 ```
 
 ### CLI Options

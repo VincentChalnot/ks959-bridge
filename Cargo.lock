@@ -232,7 +232,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "irda2tty"
+name = "ks959-bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",

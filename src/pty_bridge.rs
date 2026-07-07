@@ -268,7 +268,7 @@ mod tests {
     /// Create a PTY bridge and verify the symlink exists and points correctly.
     #[test]
     fn create_and_symlink() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-create");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-create");
         let bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
 
         let target = std::fs::read_link(&symlink).expect("symlink missing");
@@ -300,7 +300,7 @@ mod tests {
     /// Write data to the slave side, read it from the master.
     #[test]
     fn data_roundtrip_slave_to_master() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-s2m");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-s2m");
         let bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
         let mut slave_file = open_slave_raw(&bridge);
 
@@ -329,7 +329,7 @@ mod tests {
     /// Write data to the master, read from the slave.
     #[test]
     fn data_roundtrip_master_to_slave() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-m2s");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-m2s");
         let bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
         let mut slave_file = open_slave_raw(&bridge);
 
@@ -355,7 +355,7 @@ mod tests {
     /// Detect a baud rate change via polling tcgetattr.
     #[test]
     fn detect_baud_rate_change() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-baud");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-baud");
         let mut bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
 
         let slave_file = std::fs::OpenOptions::new()
@@ -396,7 +396,7 @@ mod tests {
     /// Verify initial baud rate.
     #[test]
     fn initial_baud_rate() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-initbaud");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-initbaud");
         let bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
         let speed = bridge.slave_baud_rate().expect("slave_baud_rate");
         assert!(speed > 0, "initial baud rate should be > 0");
@@ -405,7 +405,7 @@ mod tests {
     /// Symlink cleanup is idempotent.
     #[test]
     fn drop_cleanup_idempotent() {
-        let symlink = std::env::temp_dir().join("irda2tty-test-pty-drop");
+        let symlink = std::env::temp_dir().join("ks959-bridge-test-pty-drop");
         let bridge = PtyBridge::new(&symlink).expect("PtyBridge::new failed");
         std::fs::remove_file(&symlink).ok();
         drop(bridge); // should not panic

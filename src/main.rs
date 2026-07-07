@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
         baud = args.baud,
         poll_ms = args.poll_ms,
         sir_framing = args.sir_framing,
-        "starting irda2tty"
+        "starting ks959-bridge"
     );
 
     // --- Open the USB dongle ---
