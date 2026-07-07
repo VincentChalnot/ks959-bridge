@@ -2,14 +2,15 @@
 
 ## Project Overview
 
-ks959-bridge is a userspace IrDA SIR driver for the Kingsun KS-959 USB dongle (VID `07d0`, PID `4959`). It bridges the
-dongle to a PTY so libdivecomputer/Subsurface can communicate with a Cressi Donatello dive computer as if using a normal
-serial port.
+ks959-bridge bridges a Kingsun KS-959 IrDA USB dongle (VID `07d0`, PID `4959`) to libdivecomputer so a Cressi
+Donatello dive computer can download dives over infrared. It exposes a PTY that looks like a serial port to
+Subsurface/dctool.
 
-**Why:** Linux removed the IrDA subsystem in kernel 4.17 (2018). The KS-959 dongle has no working kernel driver on
-modern distros. The Cressi Donatello doesn't complete the IrLAP connection handshake (confirmed via `irdadump`), making
-the kernel IrDA stack a dead end even with out-of-tree modules. This project bypasses the entire IrDA protocol stack,
-talking directly to the dongle over USB control transfers.
+**This is NOT a kernel driver replacement.** The old kernel IrDA stack (`irda` + `ks959-sir`) was tested and fails — the
+Donatello doesn't complete the IrLAP connection handshake (confirmed via `irdadump`). This project bypasses the entire
+IrDA protocol stack, talking directly to the dongle over USB control transfers. It requires significant
+reverse-engineering to determine what the dive computer expects as IR signals and how to craft them with this specific
+hardware.
 
 **Current status:** Heavy development. All unit tests pass (45/45). The main blocker is the USB speed change control
 transfer — see "Known Blocker" below.

@@ -1,8 +1,7 @@
 # ks959-bridge — Complete Knowledge Base
 
-Everything learned while building a userspace IrDA SIR driver for the Kingsun KS-959
-USB dongle, bridging it to a PTY for libdivecomputer/Subsurface to talk to a Cressi
-Donatello dive computer.
+Everything learned while building a bridge between the Kingsun KS-959 IrDA USB dongle
+and libdivecomputer, so a Cressi Donatello dive computer can download dives over infrared.
 
 ## Table of Contents
 
@@ -28,8 +27,12 @@ Donatello dive computer.
 Linux removed the entire IrDA subsystem in kernel 4.17 (2018). The Kingsun KS-959 dongle
 had a kernel driver (`ks959-sir.c`) that lived inside that subsystem. On any modern kernel
 (the dev machine runs **Fedora 43, kernel 7.0.14**), the dongle is a dead USB device with
-no driver. This program replaces the kernel driver entirely in userspace, exposing a PTY
-that looks like a serial port to applications.
+no driver.
+
+This program is NOT a kernel driver replacement — the old IrDA stack was tested and doesn't
+work with the Cressi Donatello (it never completes the IrLAP handshake). Instead, this project
+bypasses the entire IrDA protocol stack, reverse-engineering direct USB communication with the
+dongle to bridge it to libdivecomputer.
 
 IrDA was also removed from Windows, making this class of problem universal. An alternative
 approach using out-of-tree kernel modules exists (`github.com/cschramm/irda` — builds the

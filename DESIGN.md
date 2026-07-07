@@ -3,9 +3,12 @@
 ## Problem Statement
 
 Linux removed the IrDA subsystem in kernel 4.17+. The Kingsun KS-959 USB-to-IrDA dongle
-(VID=07d0, PID=4959) has no usable driver on modern distros. We need a userspace program
-that bridges this dongle to a PTY so libdivecomputer/Subsurface can communicate with a
-Cressi Donatello dive computer as if talking to a normal serial port.
+(VID=07d0, PID=4959) has no usable driver on modern distros. The old kernel IrDA stack
+doesn't work with the Cressi Donatello anyway — it never completes the IrLAP connection
+handshake (confirmed via `irdadump`). We need a userspace program that bridges this dongle
+to libdivecomputer so the Donatello can download dives over infrared. This requires
+reverse-engineering both the dongle's USB protocol and what the dive computer expects as
+IR signals.
 
 ## IrDA Protocol Stack
 
